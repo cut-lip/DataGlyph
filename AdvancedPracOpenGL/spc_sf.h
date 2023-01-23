@@ -5,7 +5,7 @@
 
 const float SF_SEGMENT_CONSTANT = 0.1;
 const float SF_ANGLE_SCALE = 2;
-const float GLYPH_SCALE_FACTOR = 0.5;
+const float GLYPH_SCALE_FACTOR = 0.25;
 
 // An individual SPC-SF glyph located in 2-D space
 class SpcSfGlyph {
