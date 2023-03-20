@@ -3,7 +3,23 @@
 //				by Dr. Boris Kovalerchuk, Figure 13.2
 // AUTHOR:	Nicholas Cutlip (Central Washington University Computer Science)
 // DATE:	v 0.0: 29 December, 2022
-//			v 1.0: 27 February, 2023
+//			v 0.5: 27 February, 2023
+
+	/* ********************************* WBC Attribute Indices ************************************
+		#  Attribute                     Domain
+		-- ---------------------------------------- -
+		0. Clump Thickness               1 - 10
+		1. Uniformity of Cell Size       1 - 10
+		2. Uniformity of Cell Shape      1 - 10
+		3. Marginal Adhesion             1 - 10
+		4. Single Epithelial Cell Size   1 - 10
+		5. Bare Nuclei                   1 - 10
+		6. Bland Chromatin               1 - 10
+		7. Normal Nucleoli               1 - 10
+		8. Mitoses                       1 - 10
+		Class:                          (2 for benign, 4 for malignant)
+	***********************************************************************************************/
+
 
 /**************** INCLUDES ********************/
 #include <iostream>		/*  */
@@ -17,6 +33,15 @@
 #include <cmath>
 #include <iomanip>
 #include <sstream>
+#include <algorithm>
+
+// NEW PARAMS
+const int HYPERBLOCK_SIZE = 345;
+const int HYPERBLOCK_DATA_SIZE = 8;
+
+const int SEED_DATASET_SIZE = 210;
+const int SEED_DATA_SIZE = 6;
+
 
 /************************* DATA AND DIMENSION CONSTANTS *******************************/
 int SCREEN_WIDTH;						/* Screen Width */
@@ -60,7 +85,7 @@ std::vector<std::string> labels{};			/* vector of labels of representative glyph
 std::vector<std::vector<GLfloat>> reps{};	/* vector of representative glyphs */
 std::vector<bool> repsClass{};				/* vector of classes of representative glyphs */
 bool REPS_COLLECTED = false;				/* flag if rep glyphs have already been collected */
-bool IDEAL_COLLECTED = false;				/* flag if ideal glyphs have already been collected */
+bool IDEAL_COLLECTED = false;				/* flag if ideal glyphs h   ave already been collected */
 
 /************** DEBUG DATA STRUCTS (remove later) *******************/
 std::vector<std::vector<GLfloat>> mixedHood{};
@@ -335,7 +360,6 @@ void drawLocatedGlyphs(std::vector<GLfloat>* normalData, bool classify)
 	glFlush();
 }
 
-
 /*	hammingDistance
 Return the Hamming distance between two vectors,
 by taking the sqrt of the sum of the squares of the differences
@@ -375,7 +399,7 @@ using matching attributes of each vector.
 */
 float euclideanDistance(std::vector<float>* vec1, std::vector<float>* vec2)
 {
-	float sum = 0;	// initialize sum variable
+	float sum = 0.0;	// initialize sum variable
 	// initialize iterator to vec2 begin
 	std::vector<float>::iterator it2 = vec2->begin();
 
@@ -918,8 +942,23 @@ void getRepresentativeGlyphs(std::vector<std::vector<GLfloat>>* all_Data,
 			}
 		}
 
+		// identify count of dominant class of cluster
+		float domCount = std::max(benCount, malCount);
+		// itentify total count of datapoints in cluster
+		float totalCount = benCount + malCount;
+
+		// calculate percent purity of cluster
+		float percentPure = (domCount / totalCount) * 100.0;
+
+		// round label to three decimal places
+		std::string pureLabel1 = std::to_string(percentPure);
+		std::string pureLabel = pureLabel1.substr(0, 5);
+
 		// Add label to vector
-		labels.push_back(std::to_string(benCount) + " ben., " + std::to_string(malCount) + " mal.");
+		labels.push_back(pureLabel + " pure");
+		 
+
+		//labels.push_back(std::to_string(benCount) + " ben., " + std::to_string(malCount) + " mal.");
 		repsClass.push_back(benCount > malCount);
 
 		// Initialize new rep vector
@@ -958,21 +997,41 @@ void getRepresentativeGlyphs(std::vector<std::vector<GLfloat>>* all_Data,
 	// index here determines new center of cluster
 	std::vector<GLfloat>	newCenterPoint = mixedHood[CLUSTER_CENTER_FOCUS];
 
-	// Populate boolean vector to determine
-	// which data points are within threshold of current point
+	// Compute Hamming distance between all points and chosen focus point
 	for (std::vector<std::vector<GLfloat>>::iterator iter = mixedHood.begin(); iter != mixedHood.end(); ++iter)
 	{
-		// compute Euclidean distance
-		vecEDist.push_back(euclideanDistance(&newCenterPoint, &(*iter)));
-
 		// compute Hamming distance
 		vecHDist.push_back(hammingDistance(&newCenterPoint, &(*iter)));
 	}
 
-	// collect cluster distance labels
-	std::vector<std::string> distanceLabels{};
-	std::vector<int>::iterator iterH = vecHDist.begin();	// initialize iterator to distances
+	// Normalize data in focus cluster vector
+	// Normalize data in mixed neighborhood vector vector
+	int i = 0;	// loop counter
+	for (auto& vec : mixedHood)
+	{	// For each data point in the mixed neighborhood
+		const unsigned int scaleFactor = 10;
+		std::vector<float> normalData;		// Normalize data to [0, 1]
+		for (std::vector<float>::iterator iter = vec.begin(); iter < vec.end(); iter++)
+		{	// Add normalized data point to copy vector
+			normalData.push_back(*iter / scaleFactor);
+		}
+		// Copy vector to reprentative glyph array
+		mixedHood[i] = normalData;
+		++i;
+	}
 
+	// reset center point with normalized values
+	newCenterPoint = mixedHood[CLUSTER_CENTER_FOCUS];
+
+	// Compute Euclidean distance between all points and chosen focus point
+	for (std::vector<std::vector<GLfloat>>::iterator iter = mixedHood.begin(); iter != mixedHood.end(); ++iter)
+	{
+		// compute Euclidean distance
+		vecEDist.push_back(euclideanDistance(&newCenterPoint, &(*iter)));
+	}
+
+	// collect cluster distance labels
+	std::vector<int>::iterator iterH = vecHDist.begin();	// initialize iterator to distances
 	for (std::vector<GLfloat>::iterator iterE = vecEDist.begin(); iterE != vecEDist.end(); ++iterE)
 	{	// loop through distance vectors, creating label
 		std::string startLabel = "E:";	// Euclidean label
@@ -992,14 +1051,14 @@ void getRepresentativeGlyphs(std::vector<std::vector<GLfloat>>* all_Data,
 		++iterH;
 	}
 
-
 	// Insert cluster representative glyph
 	//mixedHood.insert(mixedHood.begin(), reps[CLUSTER + 2]);
 	// Insert clas of representative glyph
 	//mixedClass.insert(mixedClass.begin(), repsClass[CLUSTER + 2]);
 
+	
 	// Normalize data in REPS vector
-	int i = 0;
+	i = 0;
 	for (auto& vec : reps)
 	{
 		const unsigned int scaleFactor = 10;
@@ -1013,33 +1072,21 @@ void getRepresentativeGlyphs(std::vector<std::vector<GLfloat>>* all_Data,
 		++i;
 	}
 
-	// Normalize data in mixed neighborhood vector vector
-	i = 0;	// loop counter
-	for (auto& vec : mixedHood)
-	{	// For each data point in the mixed neighborhood
-		const unsigned int scaleFactor = 10;
-		std::vector<float> normalData;		// Normalize data to [0, 1]
-		for (std::vector<float>::iterator iter = vec.begin(); iter < vec.end(); iter++)
-		{	// Add normalized data point to copy vector
-			normalData.push_back(*iter / scaleFactor);
-		}
-		// Copy vector to reprentative glyph array
-		mixedHood[i] = normalData;
-		++i;
-	}
-
 	// Set condition for representative glyphs collected
 	REPS_COLLECTED = true;
 	// Global representative glyph vector is now initialized
 }
 
-// *********************** Display SPC-SF Hybrid Visualization ***********************
-// 
-// Data from UCI Machine Learning Repository
-// breast-cancer-wisconsin.DATA
-void myDisplay()
+// create hyperblocks using MHyper algorithm
+void mergerHyperblocks()
 {
-	/************************** OpenGl Set Up ********************************/
+
+}
+
+
+// initialize OpenGL state
+void openGLInit()
+{
 	glEnable(GL_DEPTH_TEST);	// Enable depth testing
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); //Set blending function.
 	glMatrixMode(GL_PROJECTION);
@@ -1048,16 +1095,14 @@ void myDisplay()
 	glClearColor(1.0, 1.0, 1.0, 0.0);
 	glClearDepth(1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
 
+// IMPORT DATA
+void importData(std::vector<std::vector<GLfloat>>* allData, std::vector<bool>* classify)
+{
 	// Read data file
 	std::string line = "";
 	std::ifstream myFile("breast-cancer-wisconsin.DATA");
-
-	// Process data into a 2-D vector for ease of use
-	std::vector<std::vector<GLfloat>> allData(DATA_SIZE);
-	std::vector<bool> classify{};
-	// Generalize this by using push_back and getline in test
-	// Also populate vector of classification here
 
 	for (unsigned int i = 0; i < DATA_SIZE; i++)
 	{
@@ -1080,8 +1125,8 @@ void myDisplay()
 		std::vector<GLfloat> data(dataInt.begin(), dataInt.end());
 
 		// Set color determined by class
-		if (*--(data.end()) == 4) classify.push_back(false);
-		else					  classify.push_back(true);
+		if (*--(data.end()) == 4) classify->push_back(false);
+		else					  classify->push_back(true);
 
 		// Remove labels from data
 		data.erase(data.begin());
@@ -1091,27 +1136,124 @@ void myDisplay()
 		//data.insert(data.end(), data.begin(), data.end());
 		//data.insert(data.end(), data.begin(), data.end());
 
-		allData[i] = data;
+		(*allData)[i] = data;
 	}
 	myFile.close();
+}
 
-	if (!IDEAL_COLLECTED)
-	{	// Collect ideal class glyphs, if not done
+// IMPORT SEED DATA
+void importSeedData(std::vector<std::vector<GLfloat>>* allData)
+{
+	std::string line = "";
+	std::ifstream myFile("seeds_dataset.txt");
+
+	// For each line in the hyperblock data file
+	for (unsigned int i = 0; i < SEED_DATASET_SIZE; i++)
+	{
+		getline(myFile, line);
+		int vecCount = SEED_DATA_SIZE;
+
+		// Split string into a vector
+		std::vector<int> dataFloat;
+		std::stringstream ss(line);
+
+		while (ss.good()) {
+			std::string substr = "";
+			getline(ss, substr, '\t');	// extract line from file
+			dataFloat.push_back(stof(substr));	// convert to float and push to vector
+			continue;
+		}
+
+		std::vector<GLfloat> data(dataFloat.begin(), dataFloat.end());
+		(*allData)[i] = data;	// add data point to hyperblock vector
+	}
+		myFile.close();
+}
+
+
+// IMPORT LINCOLN'S HYPERBLOCK DATA FROM CSV FILES
+void importHyperblockData(std::vector<std::vector<GLfloat>>* allData)
+{
+	// Read data file
+	std::string line = "";
+	std::ifstream myFile("HB1.csv");
+
+	// For each line in the hyperblock data file
+	for (unsigned int i = 0; i < HYPERBLOCK_SIZE; i++)
+	{
+		getline(myFile, line);
+		int vecCount = HYPERBLOCK_DATA_SIZE;
+
+		// Split string into a vector
+		std::vector<int> dataFloat;
+		std::stringstream ss(line);
+
+		while (ss.good()) {
+			std::string substr = "";
+			getline(ss, substr, ',');	// extract line from file
+			dataFloat.push_back(stof(substr));	// convert to float and push to vector
+			continue;
+		}
+
+		std::vector<GLfloat> data(dataFloat.begin(), dataFloat.end());
+		(*allData)[i] = data;	// add data point to hyperblock vector
+	}
+	myFile.close();		// close file stream
+}
+
+// *********************** Display SPC-SF Hybrid Visualization ***********************
+// 
+// Data from UCI Machine Learning Repository
+// breast-cancer-wisconsin.DATA
+void myDisplay()
+{
+	// hyperblock container
+	std::vector<std::vector<std::vector<GLfloat>>> hyperblocks{};
+
+	// seed container
+	std::vector<std::vector<GLfloat>> seeds(SEED_DATASET_SIZE);
+	importSeedData(&seeds);
+
+	/************************** OpenGl Set Up ********************************/
+	openGLInit();
+
+	// Process data into a 2-D vector for ease of use
+	std::vector<std::vector<GLfloat>> allData(DATA_SIZE);
+	std::vector<bool> classify{};	//  vector containing class of data points
+
+	// import data from csv file
+	importData(&allData, &classify);
+
+	//*****************************************************************
+	// import HB1 (first hyperblock from Lincoln)
+	std::vector<std::vector<GLfloat>> hb1(HYPERBLOCK_SIZE);
+	importHyperblockData(&hb1);
+
+	if (!IDEAL_COLLECTED)	// Collect ideal class glyphs, if not done
 		getIdealGlyphs(&allData, &classify);
-	}
 
-	if (!REPS_COLLECTED)
-	{	// Collect representative glyphs, if not already done
+	if (!REPS_COLLECTED)	// Collect representative glyphs, if not already done
 		getRepresentativeGlyphs(&allData, &classify);
-	}
 
 	// Compute points within threshold
 	std::vector<bool> close = computeAllDistances(&allData[DATA_INDEX], &allData);
-	//std::vector<bool>::iterator threshold = close.begin();
-	//std::vector<bool>::iterator classVec = classify.begin();
+	// Normalize seed data
+	unsigned int  index = 0;
+	for (auto& vec : seeds)
+	{
+		float seedNormalizeFactors[] = { 21.2, 17.3, 6.7, 4.1, 6.6 };
+
+		std::vector<float> normalData;		// Normalize data to [0, 1]
+		for (unsigned int i = 0; i < vec.size(); ++i)
+		{
+			normalData.push_back( (vec[i]) / (seedNormalizeFactors[i]));
+		}
+		seeds[index] = normalData;
+		++index;
+	}
 
 	// Normalize data
-	int i = 0;
+	index = 0;
 	for (auto& vec : allData)
 	{
 		const unsigned int scaleFactor = 10;
@@ -1120,29 +1262,30 @@ void myDisplay()
 		{
 			normalData.push_back(*iter / scaleFactor);
 		}
-		allData[i] = normalData;
-		++i;
+		allData[index] = normalData;
+		++index;
 	}
 
-	/* ********************************* WBC Attribute Indices ************************************
-		#  Attribute                     Domain
-		-- ---------------------------------------- -
-		0. Clump Thickness               1 - 10
-		1. Uniformity of Cell Size       1 - 10
-		2. Uniformity of Cell Shape      1 - 10
-		3. Marginal Adhesion             1 - 10
-		4. Single Epithelial Cell Size   1 - 10
-		5. Bare Nuclei                   1 - 10
-		6. Bland Chromatin               1 - 10
-		7. Normal Nucleoli               1 - 10
-		8. Mitoses                       1 - 10
-		Class:                          (2 for benign, 4 for malignant)
-	***********************************************************************************************/
+	// normalize hyperblock data
+	index = 0;
+	for (auto& vec : hb1)
+	{
+		const unsigned int scaleFactor = 10;
+		std::vector<float> normalData;		// Normalize data to [0, 1]
+		for (std::vector<float>::iterator iter = vec.begin(); iter < vec.end(); iter++)
+		{
+			normalData.push_back(*iter / scaleFactor);
+		}
+		hb1[index] = normalData;
+		++index;
+	}
 
-	std::vector<bool>::iterator threshold = close.begin();
-	std::vector<bool>::iterator classVec = classify.begin();
 
-	// ************************************* DISPLAY SPC-SF GRAPH *************************************
+
+	std::vector<bool>::iterator threshold = close.begin();		// initialize threshold iterator
+	std::vector<bool>::iterator classVec = classify.begin();	// initialize class iterator
+
+	// ************************************* DISPLAY SPC-SF GRAPH ***************************************
 	if (DISPLAY_SELECTOR)
 	{
 		// Display points within threshold
@@ -1200,8 +1343,7 @@ void myDisplay()
 		glPopMatrix();
 		//glFlush();
 	}
-
-	// ************************************* DISPLAY GRID OF GLYPHS *******************************
+	// ************************************* DISPLAY GRID OF GLYPHS *************************************
 	else if (!DISPLAY_SELECTOR && PC_OFF && REPS_OFF)    // Draw grid of glyphs (GRID_ROWS x GRID_COLUMNS)
 	{
 		drawGrid();
@@ -1331,6 +1473,7 @@ void myDisplay()
 		// Return to original modelview matrix
 		glPopMatrix();
 	}
+	// ******************************* DISPLAY GRID OF REPRESENTATIVE GLYPHS ****************************
 	else if (!DISPLAY_SELECTOR && PC_OFF && !REPS_OFF)
 	{
 		// Draw grid of representative glyphs
@@ -1344,12 +1487,12 @@ void myDisplay()
 		Point2* pos3 = new Point2();
 
 		// Initialize data iterators
-		//std::vector<std::vector<GLfloat>>::iterator repsIt = reps.begin();
-		//std::vector<bool>::iterator classIt = repsClass.begin();
-		std::vector<std::vector<GLfloat>>::iterator repsIt = mixedHood.begin();
-		std::vector<bool>::iterator classIt = mixedClass.begin();
-		//std::vector<std::string>::iterator labelsIt = labels.begin();
-		std::vector<std::string>::iterator labelsIt = distanceLabels.begin();
+		std::vector<std::vector<GLfloat>>::iterator repsIt = reps.begin();
+		std::vector<bool>::iterator classIt = repsClass.begin();
+		//std::vector<std::vector<GLfloat>>::iterator repsIt = mixedHood.begin();
+		//std::vector<bool>::iterator classIt = mixedClass.begin();
+		std::vector<std::string>::iterator labelsIt = labels.begin();
+		//std::vector<std::string>::iterator labelsIt = distanceLabels.begin();
 
 		glPushMatrix();		// Scale and translate glyph
 
@@ -1362,27 +1505,13 @@ void myDisplay()
 			{
 				// If within threshold of current point,
 				// display glyph at current grid index
-				if (repsIt != mixedHood.end())
+				if (repsIt != reps.end())
 				{
 					// Draw polygon outlines
 					glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 					// Pointer to current data point
 					std::vector<GLfloat> processedData = *repsIt;
-
-					/* ******************** WBC Attribute Indices ***************
-					#  Attribute                     Domain
-					-------------------------------------------
-					0. Clump Thickness               1 - 10
-					1. Uniformity of Cell Size       1 - 10
-					2. Uniformity of Cell Shape      1 - 10
-					3. Marginal Adhesion             1 - 10
-					4. Single Epithelial Cell Size   1 - 10
-					5. Bare Nuclei                   1 - 10
-					6. Bland Chromatin               1 - 10
-					7. Normal Nucleoli               1 - 10
-					8. Mitoses                       1 - 10
-					************************************************************/
 
 					// Vector holding Stick Figure attributes
 					std::vector<GLfloat> stickFig{};
@@ -1421,6 +1550,7 @@ void myDisplay()
 					glColor3f(0.0, 0.0, 0.0);
 					glRasterPos2f(-0.9, -0.9);
 
+					
 					//if (repCount < 0)
 					//{
 						// Extract neighborhood class ratio
@@ -1439,6 +1569,7 @@ void myDisplay()
 						++labelsIt;	// Increment label iterator
 					//}
 					
+					
 
 					glPushMatrix();		// Push new matrix
 					glMatrixMode(GL_PROJECTION);
@@ -1451,13 +1582,12 @@ void myDisplay()
 					GLfloat TRANS_DEF = 0.0;	// Default translation factor
 					GLfloat SCALE_DEF = 1.0;	// Default scaling factor
 
-					glPushMatrix();					// Push new matrix for glyph transformations
+					glPushMatrix();	// Push new matrix for glyph transformations
 					// Translate glyph right a based on first SPC shift, and up a set value
 					glTranslatef(glyphTransHort, glyphTransVert, TRANS_DEF);
 
 					GLfloat glyphScaleFactor = 2.0;
 
-					
 					glEnable(GL_BLEND);		// Enable blending.
 					glDepthMask(GL_FALSE);	// Disable depth masking
 					// *********************** DRAW STICK FIGURE ***********************
@@ -1471,6 +1601,7 @@ void myDisplay()
 						glyph.drawGlyphSF(pos2, pos3, stickFig.begin(), *classIt, *turt, DYNAMIC_ANGLES, POS_ANGLE,
 							GLYPH_SCALE_FACTOR, SF_SEGMENT_CONSTANT, SF_ANGLE_SCALE, ANGLE_FOCUS, BIRD_FOCUS);
 					}
+
 					// Disable blending and resume depth mask
 					glDepthMask(GL_TRUE);
 					glDisable(GL_BLEND);
@@ -1490,7 +1621,7 @@ void myDisplay()
 					++colNum;		// Increment column index
 				}
 
-				if (repsIt == mixedHood.end())
+				if (repsIt == reps.end())
 				{	// If at end of data, set loop exit conditions
 					colNum = NUM_COLUMNS;
 					rowNum = NUM_ROWS;
@@ -1516,6 +1647,7 @@ void myDisplay()
 		// Return to original modelview matrix
 		glPopMatrix();
 	}
+	// ******************************** DISPLAY PARALLEL COORDINATES ************************************
 	else
 	{	// Draw PC
 		glClearColor(1.0, 1.0, 1.0, 0.0);	// Clear window to white
@@ -1574,10 +1706,9 @@ void myDisplay()
 			++classVec;
 			++threshold;
 		}
-
-
 		glPopMatrix();
 	}
+
 	glutSwapBuffers();	// Swap buffers
 	glFlush();			// Flush buffer
 }
