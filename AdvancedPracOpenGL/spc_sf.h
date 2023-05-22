@@ -98,7 +98,8 @@ public:
 	// Draw 2-segment SF (Stick Figure) glyph
 	void drawGlyphSF(Point2* pos2, Point2* pos3,
 		std::vector<GLfloat>::iterator stick, bool benign, TurtleG turt, bool dynamicAngles, bool posAngle,
-		GLfloat glyphScaleFactor, GLfloat sfSegmentConstant, GLfloat sfAngleScale, bool ANGLE_FOCUS, bool birdFocus)
+		GLfloat glyphScaleFactor, GLfloat sfSegmentConstant, GLfloat sfAngleScale, bool ANGLE_FOCUS, bool birdFocus,
+		float colors[6] )
 	{
 		// Initialize scaling params
 		GLYPH_SCALE_FACTOR = glyphScaleFactor;
@@ -110,7 +111,7 @@ public:
 		{	// If class is benign
 			if (birdFocus)
 			{	// If bird focus is on, color
-				glColor4f(0.0, 0.0, 1.0, 0.7);
+				glColor4f(colors[0], colors[1], colors[2], 1.0);
 			}
 			else
 			{	// If bird focus is off, grey out
@@ -121,7 +122,7 @@ public:
 		{	// If class is malignant
 			if (birdFocus)
 			{	// If bird focus is on, color
-				glColor4f(1.0, 0.0, 0.0, 0.7);
+				glColor4f(colors[0], colors[1], colors[2], 1.0);
 			}
 			else
 			{	// If bird focus is off, grey out
@@ -171,7 +172,7 @@ public:
 		{
 			if (birdFocus)
 			{
-				glColor4f(0.0, 0.0, 1.0, 0.7);
+				glColor4f(colors[3], colors[4], colors[5], 0.7);
 			}
 			else
 			{
@@ -182,7 +183,7 @@ public:
 		{
 			if (birdFocus)
 			{
-				glColor4f(1.0, 0.0, 0.0, 0.7);
+				glColor4f(colors[3], colors[4], colors[5], 0.7);
 			}
 			else
 			{
